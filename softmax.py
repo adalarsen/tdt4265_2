@@ -108,7 +108,7 @@ def gradient_descent(X, targets, w, learning_rate, should_check_gradient):
     dw = [dw_1, dw_2]
 
     if should_check_gradient:
-        check_gradient(X, targets, w, 1e-2,  dw)
+        check_gradient(X, targets, w[1], 1e-2,  dw[1])
     w[0] = w[0] - learning_rate * dw[0]
     w[1] = w[1] - learning_rate * dw[1]
 
@@ -131,7 +131,7 @@ X_train, Y_train, X_val, Y_val = train_val_split(X_train, Y_train, 0.1)
 batch_size = 64
 learning_rate = 0.5
 num_batches = X_train.shape[0] // batch_size
-should_gradient_check = False
+should_gradient_check = True
 check_step = num_batches // 10
 max_epochs = 20
 hidden_units = 64
