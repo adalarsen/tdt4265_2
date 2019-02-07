@@ -66,6 +66,7 @@ def tanh(a):
 def tanh_der(a):
     return 1- a**2
 
+
 def forward(X, w, activation):
     a = X.dot(w.T)
     if activation:
@@ -78,19 +79,21 @@ def forward(X, w, activation):
 def calculate_accuracy(X, targets, w):
     #output = forward(X, w)
     y_1 = forward(X, w[0], 0)  # 54000,64
-    y_2 = forward(y_1, w[1], 1)  # 54000,10
+    y_2 = forward(y_1, w[1], 0)  # 54000,10
+    y_3 = forward(y_2, w[2], 1)
 
-    predictions = y_2.argmax(axis=1)
+    predictions = y_3.argmax(axis=1)
     targets = targets.argmax(axis=1)
     return (predictions == targets).mean()
 
 def cross_entropy_loss(X, targets, w):
     y_1 = forward(X, w[0], 0) #54000,64
-    y_2 = forward(y_1, w[1], 1) #54000,10
+    y_2 = forward(y_1, w[1], 0) #54000,10
+    y_3 = forward(y_2, w[2], 1)
 
-    assert y_2.shape == targets.shape
+    assert y_3.shape == targets.shape
     #output[output == 0] = 1e-8
-    log_y = np.log(y_2)
+    log_y = np.log(y_3)
     cross_entropy = -targets * log_y
     #print(cross_entropy.shape)
     return cross_entropy.mean()
@@ -98,33 +101,44 @@ def cross_entropy_loss(X, targets, w):
 def gradient_descent(X, targets, w, learning_rate, should_check_gradient):
     normalization_factor = X.shape[0] * targets.shape[1] # batch_size * num_classes
     y_1 = forward(X, w[0], 0) #64,64
-    y_2 = forward(y_1, w[1], 1) #64,10
+    y_2 = forward(y_1, w[1], 0)
+    y_3 = forward(y_2, w[2], 1) #64,10
 
-    delta_k = - (targets - y_2) #64,10
+    delta_k = - (targets - y_3) #64,10
 
-    dw_2 = delta_k.T.dot(y_1) #np.matmul(y_1.T, delta_k).T #64,10
+    dw_3 = delta_k.T.dot(y_2) #np.matmul(y_1.T, delta_k).T #64,10
     # w_2 er 10, 64
     #dw_2 = delta_k.T.dot(outputs)
 
-    d_output_1 = delta_k.dot(w[1]) #np.matmul(w[1].T, delta_k.T) #64,64
+    d_output_2 = delta_k.dot(w[2])  # np.matmul(w[1].T, delta_k.T) #64,64
     if tan:
-        delta_k_2 = tanh_der(y_1) * d_output_1
+        delta_2 = tanh_der(y_2) * d_output_2
     else:
-        delta_k_2 =  y_1*(1 - y_1) * d_output_1 #64,64
+        delta_2 = y_2 * (1 - y_2) * d_output_2  # 64,64
 
-    dw_1 = delta_k_2.T.dot(X) #64,785
+    dw_2 = delta_2.dot(y_1)
+
+    d_output_1 = delta_2.dot(w[1]) #np.matmul(w[1].T, delta_k.T) #64,64
+    if tan:
+        delta_1 = tanh_der(y_1) * d_output_1
+    else:
+        delta_1 =  y_1*(1 - y_1) * d_output_1 #64,64
+
+    dw_1 = delta_1.T.dot(X) #64,785
     # w_1 er 64,785
 
+    dw_3 = dw_3 / normalization_factor
     dw_2 = dw_2 / normalization_factor # Normalize gradient equally as loss normalization
     dw_1 = dw_1 / normalization_factor
     assert dw_1.shape == w[0].shape, "dw shape was: {}. Expected: {}".format(dw_2.shape, w[0].shape)
 
-    dw = [dw_1, dw_2]
+    dw = [dw_1, dw_2, dw_3]
 
     if should_check_gradient:
         check_gradient(X, targets, w[0], 1e-2,  dw[0], w[1])
     w[0] = w[0] - learning_rate * dw[0]
     w[1] = w[1] - learning_rate * dw[1]
+    w[2] = w[2] - learning_rate * dw[2]
 
     return w
 
@@ -168,9 +182,10 @@ VAL_ACC = []
 def train_loop():
     w1 = weight_initialization(X_train.shape[1],hidden_units, 0)
        # np.random.rand(hidden_units, X_train.shape[1])
-    w2 = weight_initialization(hidden_units, Y_train.shape[1], 0)
+    w2 = weight_initialization(hidden_units, hidden_units)
         #np.random.rand(Y_train.shape[1], hidden_units)
-    w = [w1, w2]
+    w3 = weight_initialization(hidden_units, Y_train.shape[1], 0)
+    w = [w1, w2, w3]
 
     for e in range(max_epochs): # Epochs
         for i in range(num_batches):
