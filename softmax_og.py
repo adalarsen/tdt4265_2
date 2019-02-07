@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import mnist
 import tqdm
-#mnist.init()
+
 
 def should_early_stop(validation_loss, num_steps=3):
     if len(validation_loss) < num_steps+1:
@@ -56,75 +56,57 @@ def softmax(a):
     a_exp = np.exp(a)
     return a_exp / a_exp.sum(axis=1, keepdims=True)
 
-def sigmoid(a):
-    return np.divide(1, (1 + np.exp(-a)))
-
 def forward(X, w):
     a = X.dot(w.T)
     return softmax(a)
 
 def calculate_accuracy(X, targets, w):
-    #output = forward(X, w)
-    output = forward(X, w[0])  # 54000,64
-    output_2 = forward(output, w[1])  # 54000,10
-
-    predictions = output_2.argmax(axis=1)
+    output = forward(X, w)
+    predictions = output.argmax(axis=1)
     targets = targets.argmax(axis=1)
     return (predictions == targets).mean()
 
 def cross_entropy_loss(X, targets, w):
-    output = forward(X, w[0]) #54000,64
-    output_2 = forward(output, w[1]) #54000,10
+    # w shape 10, 785
+    # X shape 54000, 785
+    # output shape 54000 10
+    output = forward(X, w)
 
-    assert output_2.shape == targets.shape
+    assert output.shape == targets.shape 
     #output[output == 0] = 1e-8
-    log_y = np.log(output_2)
+    log_y = np.log(output)
     cross_entropy = -targets * log_y
     #print(cross_entropy.shape)
     return cross_entropy.mean()
 
 def gradient_descent(X, targets, w, learning_rate, should_check_gradient):
     normalization_factor = X.shape[0] * targets.shape[1] # batch_size * num_classes
-    y_1 = forward(X, w[0]) #64,64
+    outputs = forward(X, w)
 
-    outputs = forward(y_1,w[1]) #64,10
+    delta_k = - (targets - outputs)
 
-    delta_k = - (targets - outputs) #64,10
+    dw = delta_k.T.dot(X) #10, 785
 
-    dw_2 = np.matmul(y_1.T, delta_k).T #64,10
-    # w_2 er 10, 64
-    #dw_2 = delta_k.T.dot(outputs)
-
-    d_output_1 = np.matmul(w[1].T, delta_k.T) #64,64
-    delta_k_2 = d_output_1 * y_1*(1 - y_1) #64,64
-
-    dw_1 = delta_k_2.T.dot(X) #64,785
-    # w_1 er 64,785
-
-    dw_2 = dw_2 / normalization_factor # Normalize gradient equally as loss normalization
-    dw_1 = dw_1 / normalization_factor
-    assert dw_1.shape == w[0].shape, "dw shape was: {}. Expected: {}".format(dw_2.shape, w[0].shape)
-
-    dw = [dw_1, dw_2]
+    dw = dw / normalization_factor # Normalize gradient equally as loss normalization
+    assert dw.shape == w.shape, "dw shape was: {}. Expected: {}".format(dw.shape, w.shape)
 
     if should_check_gradient:
         check_gradient(X, targets, w, 1e-2,  dw)
-    w[0] = w[0] - learning_rate * dw[0]
-    w[1] = w[1] - learning_rate * dw[1]
 
+    w = w - learning_rate * dw
     return w
 
 
 X_train, Y_train, X_test, Y_test = mnist.load()
 
 # Pre-process data
-X_train, X_test = X_train / 127.5, X_test / 127.5
-X_train, X_test = X_train-1, X_test-1
+X_train, X_test = X_train / 255, X_test / 255
 X_train = bias_trick(X_train)
 X_test = bias_trick(X_test)
 Y_train, Y_test = onehot_encode(Y_train), onehot_encode(Y_test)
 
 X_train, Y_train, X_val, Y_val = train_val_split(X_train, Y_train, 0.1)
+
 
 # Hyperparameters
 
@@ -134,7 +116,6 @@ num_batches = X_train.shape[0] // batch_size
 should_gradient_check = False
 check_step = num_batches // 10
 max_epochs = 20
-hidden_units = 64
 
 # Tracking variables
 TRAIN_LOSS = []
@@ -144,7 +125,7 @@ TRAIN_ACC = []
 TEST_ACC = []
 VAL_ACC = []
 def train_loop():
-    w = [np.zeros((hidden_units, X_train.shape[1])), np.zeros((Y_train.shape[1], hidden_units))]
+    w = np.zeros((Y_train.shape[1], X_train.shape[1]))
     for e in range(max_epochs): # Epochs
         for i in tqdm.trange(num_batches):
             X_batch = X_train[i*batch_size:(i+1)*batch_size]
@@ -165,13 +146,12 @@ def train_loop():
                 if should_early_stop(VAL_LOSS):
                     print(VAL_LOSS[-4:])
                     print("early stopping.")
-                    return w[1]
+                    return w
     return w
 
 
-
 w = train_loop()
-'''
+
 plt.plot(TRAIN_LOSS, label="Training loss")
 plt.plot(TEST_LOSS, label="Testing loss")
 plt.plot(VAL_LOSS, label="Validation loss")
@@ -194,7 +174,7 @@ w = w.reshape(10, 28, 28)
 w = np.concatenate(w, axis=0)
 plt.imshow(w, cmap="gray")
 plt.show()
-'''
+
 
 
 
