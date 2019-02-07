@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import mnist
-import tqdm
+#import tqdm
 #mnist.init()
 
 def should_early_stop(validation_loss, num_steps=3):
@@ -38,7 +38,7 @@ def onehot_encode(Y, n_classes=10):
 def bias_trick(X):
     return np.concatenate((X, np.ones((len(X), 1))), axis=1)
 
-def check_gradient(X, targets, w, epsilon, computed_gradient):
+def check_gradient(X, targets, w, epsilon, computed_gradient, w2):
     print("Checking gradient...")
     dw = np.zeros_like(w)
     for k in range(w.shape[0]):
@@ -46,11 +46,12 @@ def check_gradient(X, targets, w, epsilon, computed_gradient):
             new_weight1, new_weight2 = np.copy(w), np.copy(w)
             new_weight1[k,j] += epsilon
             new_weight2[k,j] -= epsilon
-            loss1 = cross_entropy_loss(X, targets, new_weight1)
-            loss2 = cross_entropy_loss(X, targets, new_weight2)
+            loss1 = cross_entropy_loss(X, targets, [new_weight1, w2])
+            loss2 = cross_entropy_loss(X, targets, [new_weight2, w2])
             dw[k,j] = (loss1 - loss2) / (2*epsilon)
     maximum_abosulte_difference = abs(computed_gradient-dw).max()
     assert maximum_abosulte_difference <= epsilon**2, "Absolute error was: {}".format(maximum_abosulte_difference)
+    print("Hello")
 
 def softmax(a):
     a_exp = np.exp(a)
@@ -59,44 +60,46 @@ def softmax(a):
 def sigmoid(a):
     return np.divide(1, (1 + np.exp(-a)))
 
-def forward(X, w):
+def forward(X, w, activation):
     a = X.dot(w.T)
-    return softmax(a)
+    if activation:
+        return softmax(a)
+    else:
+        return sigmoid(a)
 
 def calculate_accuracy(X, targets, w):
     #output = forward(X, w)
-    output = forward(X, w[0])  # 54000,64
-    output_2 = forward(output, w[1])  # 54000,10
+    y_1 = forward(X, w[0], 0)  # 54000,64
+    y_2 = forward(y_1, w[1], 1)  # 54000,10
 
-    predictions = output_2.argmax(axis=1)
+    predictions = y_2.argmax(axis=1)
     targets = targets.argmax(axis=1)
     return (predictions == targets).mean()
 
 def cross_entropy_loss(X, targets, w):
-    output = forward(X, w[0]) #54000,64
-    output_2 = forward(output, w[1]) #54000,10
+    y_1 = forward(X, w[0], 0) #54000,64
+    y_2 = forward(y_1, w[1], 1) #54000,10
 
-    assert output_2.shape == targets.shape
+    assert y_2.shape == targets.shape
     #output[output == 0] = 1e-8
-    log_y = np.log(output_2)
+    log_y = np.log(y_2)
     cross_entropy = -targets * log_y
     #print(cross_entropy.shape)
     return cross_entropy.mean()
 
 def gradient_descent(X, targets, w, learning_rate, should_check_gradient):
     normalization_factor = X.shape[0] * targets.shape[1] # batch_size * num_classes
-    y_1 = forward(X, w[0]) #64,64
+    y_1 = forward(X, w[0], 0) #64,64
+    y_2 = forward(y_1, w[1], 1) #64,10
 
-    outputs = forward(y_1,w[1]) #64,10
+    delta_k = - (targets - y_2) #64,10
 
-    delta_k = - (targets - outputs) #64,10
-
-    dw_2 = np.matmul(y_1.T, delta_k).T #64,10
+    dw_2 = delta_k.T.dot(y_1) #np.matmul(y_1.T, delta_k).T #64,10
     # w_2 er 10, 64
     #dw_2 = delta_k.T.dot(outputs)
 
-    d_output_1 = np.matmul(w[1].T, delta_k.T) #64,64
-    delta_k_2 = d_output_1 * y_1*(1 - y_1) #64,64
+    d_output_1 = delta_k.dot(w[1]) #np.matmul(w[1].T, delta_k.T) #64,64
+    delta_k_2 =  y_1*(1 - y_1) * d_output_1 #64,64
 
     dw_1 = delta_k_2.T.dot(X) #64,785
     # w_1 er 64,785
@@ -108,11 +111,15 @@ def gradient_descent(X, targets, w, learning_rate, should_check_gradient):
     dw = [dw_1, dw_2]
 
     if should_check_gradient:
-        check_gradient(X, targets, w[1], 1e-2,  dw[1])
+        check_gradient(X, targets, w[0], 1e-2,  dw[0], w[1])
     w[0] = w[0] - learning_rate * dw[0]
     w[1] = w[1] - learning_rate * dw[1]
 
     return w
+
+def weight_initialization(input_units, output_units):
+    weight_shape = (output_units, input_units)
+    return np.random.uniform(-1, 1, weight_shape)
 
 
 X_train, Y_train, X_test, Y_test = mnist.load()
@@ -128,10 +135,10 @@ X_train, Y_train, X_val, Y_val = train_val_split(X_train, Y_train, 0.1)
 
 # Hyperparameters
 
-batch_size = 64
-learning_rate = 0.5
+batch_size = 128
+learning_rate = 0.8
 num_batches = X_train.shape[0] // batch_size
-should_gradient_check = True
+should_gradient_check = False
 check_step = num_batches // 10
 max_epochs = 20
 hidden_units = 64
@@ -144,9 +151,14 @@ TRAIN_ACC = []
 TEST_ACC = []
 VAL_ACC = []
 def train_loop():
-    w = [np.zeros((hidden_units, X_train.shape[1])), np.zeros((Y_train.shape[1], hidden_units))]
+    w1 = weight_initialization(X_train.shape[1],hidden_units)
+       # np.random.rand(hidden_units, X_train.shape[1])
+    w2 = weight_initialization(hidden_units, Y_train.shape[1])
+        #np.random.rand(Y_train.shape[1], hidden_units)
+    w = [w1, w2]
+
     for e in range(max_epochs): # Epochs
-        for i in tqdm.trange(num_batches):
+        for i in range(num_batches):
             X_batch = X_train[i*batch_size:(i+1)*batch_size]
             Y_batch = Y_train[i*batch_size:(i+1)*batch_size]
 
@@ -162,33 +174,39 @@ def train_loop():
                 TRAIN_ACC.append(calculate_accuracy(X_train, Y_train, w))
                 VAL_ACC.append(calculate_accuracy(X_val, Y_val, w))
                 TEST_ACC.append(calculate_accuracy(X_test, Y_test, w))
+                '''
                 if should_early_stop(VAL_LOSS):
                     print(VAL_LOSS[-4:])
                     print("early stopping.")
                     return w[1]
+                '''
+        if (e % 1 == 0):
+            print("Epoch: %d, Loss: %.8f, Acc: %.8f, Val_Loss: %.8f, Val_Acc: %.8f "
+                 % (e, TRAIN_LOSS[-1], TRAIN_ACC[-1], VAL_LOSS[-1], VAL_ACC[-1] ))
+
     return w
 
 
 
 w = train_loop()
-'''
+
 plt.plot(TRAIN_LOSS, label="Training loss")
 plt.plot(TEST_LOSS, label="Testing loss")
 plt.plot(VAL_LOSS, label="Validation loss")
 plt.legend()
-plt.ylim([0, 0.05])
+#plt.ylim([0, 0.05])
 plt.show()
 
 plt.clf()
 plt.plot(TRAIN_ACC, label="Training accuracy")
 plt.plot(TEST_ACC, label="Testing accuracy")
 plt.plot(VAL_ACC, label="Validation accuracy")
-plt.ylim([0.8, 1.0])
+#plt.ylim([0.8, 1.0])
 plt.legend()
 plt.show()
 
 plt.clf()
-    
+'''
 w = w[:, :-1] # Remove bias
 w = w.reshape(10, 28, 28)
 w = np.concatenate(w, axis=0)
