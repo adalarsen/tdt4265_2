@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import mnist
 import tqdm
-
+#mnist.init()
 
 def should_early_stop(validation_loss, num_steps=3):
     if len(validation_loss) < num_steps+1:
@@ -56,6 +56,9 @@ def softmax(a):
     a_exp = np.exp(a)
     return a_exp / a_exp.sum(axis=1, keepdims=True)
 
+def sigmoid(a):
+    return np.divide(1, (1 + np.exp(-a)))
+
 def forward(X, w):
     a = X.dot(w.T)
     return softmax(a)
@@ -77,30 +80,41 @@ def cross_entropy_loss(X, targets, w):
 
 def gradient_descent(X, targets, w, learning_rate, should_check_gradient):
     normalization_factor = X.shape[0] * targets.shape[1] # batch_size * num_classes
-    outputs = forward(X, w)
+    outputs_1 = forward(X, w[0])
+    outputs_2 = forward(sigmoid(outputs_1),w[1])
+
+    outputs = softmax(outputs_2)
     delta_k = - (targets - outputs)
 
-    dw = delta_k.T.dot(X)
-    dw = dw / normalization_factor # Normalize gradient equally as loss normalization
-    assert dw.shape == w.shape, "dw shape was: {}. Expected: {}".format(dw.shape, w.shape)
+    dw_2 = delta_k.T.dot(outputs)
+    d_output_1 = np.matmul(w[1].T, delta_k.T)
+    delta_k_2 = d_output_1 * sigmoid(outputs_1)*(1 - sigmoid(outputs_1))
+    dw_1 = delta_k_2.T.dot(X)
+    dw_2 = dw_2 / normalization_factor # Normalize gradient equally as loss normalization
+    dw_1 = dw_1 / normalization_factor
+    assert dw_1.shape == w[0].shape, "dw shape was: {}. Expected: {}".format(dw_2.shape, w[0].shape)
 
+    dw = [dw_1, dw_2]
+    print(dw[0].shape)
+    print(dw[1].shape)
+    exit(0)
     if should_check_gradient:
         check_gradient(X, targets, w, 1e-2,  dw)
-
-    w = w - learning_rate * dw
+    w[0] = w[0] - learning_rate * dw[0]
+    w[1] = w[1] - learning_rate * dw[1]
     return w
 
 
 X_train, Y_train, X_test, Y_test = mnist.load()
 
 # Pre-process data
-X_train, X_test = X_train / 255, X_test / 255
+X_train, X_test = X_train / 127.5, X_test / 127.5
+X_train, X_test = X_train-1, X_test-1
 X_train = bias_trick(X_train)
 X_test = bias_trick(X_test)
 Y_train, Y_test = onehot_encode(Y_train), onehot_encode(Y_test)
 
 X_train, Y_train, X_val, Y_val = train_val_split(X_train, Y_train, 0.1)
-
 
 # Hyperparameters
 
@@ -110,6 +124,7 @@ num_batches = X_train.shape[0] // batch_size
 should_gradient_check = False
 check_step = num_batches // 10
 max_epochs = 20
+hidden_units = 64
 
 # Tracking variables
 TRAIN_LOSS = []
@@ -119,7 +134,7 @@ TRAIN_ACC = []
 TEST_ACC = []
 VAL_ACC = []
 def train_loop():
-    w = np.zeros((Y_train.shape[1], X_train.shape[1]))
+    w = [np.zeros((hidden_units, X_train.shape[1])), np.zeros((Y_train.shape[1], hidden_units))]
     for e in range(max_epochs): # Epochs
         for i in tqdm.trange(num_batches):
             X_batch = X_train[i*batch_size:(i+1)*batch_size]
@@ -144,8 +159,9 @@ def train_loop():
     return w
 
 
-w = train_loop()
 
+w = train_loop()
+'''
 plt.plot(TRAIN_LOSS, label="Training loss")
 plt.plot(TEST_LOSS, label="Testing loss")
 plt.plot(VAL_LOSS, label="Validation loss")
@@ -168,7 +184,7 @@ w = w.reshape(10, 28, 28)
 w = np.concatenate(w, axis=0)
 plt.imshow(w, cmap="gray")
 plt.show()
-
+'''
 
 
 
