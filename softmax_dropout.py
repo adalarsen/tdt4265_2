@@ -40,7 +40,7 @@ def bias_trick(X):
 
 def check_gradient(X, targets, w, epsilon, computed_gradient, w2):
     print("Checking gradient...")
-    dw = np.zeros_like(w)
+    dw1 = np.zeros_like(w)
     for k in range(w.shape[0]):
         for j in range(w.shape[1]):
             new_weight1, new_weight2 = np.copy(w), np.copy(w)
@@ -48,8 +48,20 @@ def check_gradient(X, targets, w, epsilon, computed_gradient, w2):
             new_weight2[k,j] -= epsilon
             loss1 = cross_entropy_loss(X, targets, [new_weight1, w2])
             loss2 = cross_entropy_loss(X, targets, [new_weight2, w2])
-            dw[k,j] = (loss1 - loss2) / (2*epsilon)
-    maximum_abosulte_difference = abs(computed_gradient-dw).max()
+            dw1[k,j] = (loss1 - loss2) / (2*epsilon)
+    maximum_abosulte_difference = abs(computed_gradient[0]-dw1).max()
+    assert maximum_abosulte_difference <= epsilon**2, "Absolute error was: {}".format(maximum_abosulte_difference)
+    print("Heisann")
+    dw2 = np.zeros_like(w2)
+    for k in range(w2.shape[0]):
+        for j in range(w2.shape[1]):
+            new_weight1, new_weight2 = np.copy(w2), np.copy(w2)
+            new_weight1[k,j] += epsilon
+            new_weight2[k,j] -= epsilon
+            loss1 = cross_entropy_loss(X, targets, [w, new_weight1])
+            loss2 = cross_entropy_loss(X, targets, [w, new_weight2])
+            dw2[k,j] = (loss1 - loss2) / (2*epsilon)
+    maximum_abosulte_difference = abs(computed_gradient[1]-dw2).max()
     assert maximum_abosulte_difference <= epsilon**2, "Absolute error was: {}".format(maximum_abosulte_difference)
     print("Hello")
 
@@ -66,27 +78,34 @@ def tanh(a):
 def tanh_der(a):
     return 1- a**2
 
-def forward(X, w, activation):
+def forward(X, w, activation, keep_prob = 0.7):
     a = X.dot(w.T)
     if activation:
-        return softmax(a)
+        return softmax(a), None
     elif tan:
-        return tanh(a)
+        out = tanh(a)
+        dropout = np.random.rand(out.shape[0], out.shape[1])
+
+        dropout = dropout < keep_prob
+        out = out * dropout
+
+        out = out/keep_prob
+        return out, dropout
     else:
         return sigmoid(a)
 
 def calculate_accuracy(X, targets, w):
     #output = forward(X, w)
-    y_1 = forward(X, w[0], 0)  # 54000,64
-    y_2 = forward(y_1, w[1], 1)  # 54000,10
+    y_1,_ = forward(X, w[0], 0)  # 54000,64
+    y_2,_ = forward(y_1, w[1], 1)  # 54000,10
 
     predictions = y_2.argmax(axis=1)
     targets = targets.argmax(axis=1)
     return (predictions == targets).mean()
 
 def cross_entropy_loss(X, targets, w):
-    y_1 = forward(X, w[0], 0) #54000,64
-    y_2 = forward(y_1, w[1], 1) #54000,10
+    y_1,_ = forward(X, w[0], 0) #54000,64
+    y_2,_ = forward(y_1, w[1], 1) #54000,10
 
     assert y_2.shape == targets.shape
     #output[output == 0] = 1e-8
@@ -97,17 +116,22 @@ def cross_entropy_loss(X, targets, w):
 
 def gradient_descent(X, targets, w, learning_rate, should_gradient_check, prev_dw):
     normalization_factor = X.shape[0] * targets.shape[1] # batch_size * num_classes
-    y_1 = forward(X, w[0], 0) #64,64
-    y_2 = forward(y_1, w[1], 1) #64,10
+    y_1, dropout = forward(X, w[0], 0) #64,64
+    y_2, _ = forward(y_1, w[1], 1) #64,10
 
     delta_k = - (targets - y_2) #64,10
 
     dw_2 = delta_k.T.dot(y_1) #np.matmul(y_1.T, delta_k).T #64,10
     # w_2 er 10, 64
     #dw_2 = delta_k.T.dot(outputs)
-
+    keep_prob = 0.7
     d_output_1 = delta_k.dot(w[1]) #np.matmul(w[1].T, delta_k.T) #64,64
+
     if tan:
+        d_output_1 = (dropout * d_output_1)
+        d_output_1 = d_output_1/keep_prob
+
+        #out = d_output_1 * np.int64()
         delta_k_2 = tanh_der(y_1) * d_output_1
     else:
         delta_k_2 =  y_1*(1 - y_1) * d_output_1 #64,64
@@ -121,12 +145,13 @@ def gradient_descent(X, targets, w, learning_rate, should_gradient_check, prev_d
 
     dw = [dw_1, dw_2]
 
-    if should_gradient_check:
-        check_gradient(X, targets, w[0], 1e-2,  dw, w[1])
-        should_gradient_check= 0
+    #if should_gradient_check:
+    #    check_gradient(X, targets, w[0], 1e-2,  dw, w[1])
+    #    should_gradient_check= 0
     mu = 0.9
     w[0] = w[0] - learning_rate * dw[0] - mu * prev_dw[0]
     w[1] = w[1] - learning_rate * dw[1] - mu * prev_dw[1]
+
 
     return w, dw, should_gradient_check
 
@@ -139,6 +164,8 @@ def weight_initialization(input_units, output_units, init):
 
 
 X_train, Y_train, X_test, Y_test = mnist.load()
+X_train = X_train[:2000]
+Y_train = Y_train[:2000]
 
 # Pre-process data
 X_train, X_test = X_train / 127.5, X_test / 127.5
@@ -154,11 +181,12 @@ X_train, Y_train, X_val, Y_val = train_val_split(X_train, Y_train, 0.1)
 batch_size = 128
 learning_rate = 0.8
 num_batches = X_train.shape[0] // batch_size
-should_gradient_check = False
+should_gradient_check = True
 check_step = num_batches // 10
 max_epochs = 20
 hidden_units = 64
 tan = 1
+
 
 # Tracking variables
 TRAIN_LOSS = []
@@ -174,7 +202,6 @@ def train_loop():
     w2 = weight_initialization(hidden_units, Y_train.shape[1], 0)
         #np.random.rand(Y_train.shape[1], hidden_units)
     w = [w1, w2]
-
     prev_dw1 = np.zeros(w1.shape)
     prev_dw2 = np.zeros(w2.shape)
     prev_dw = [prev_dw1, prev_dw2]
@@ -184,7 +211,10 @@ def train_loop():
             X_batch = X_train[i*batch_size:(i+1)*batch_size]
             Y_batch = Y_train[i*batch_size:(i+1)*batch_size]
 
+
             w, prev_dw, should_gradient_check = gradient_descent(X_batch, Y_batch, w, learning_rate, should_gradient_check, prev_dw)
+
+            #should_gradient_check = 0
             #print(cross_entropy_loss(X_batch, Y_batch, w))
             if i % check_step == 0:
                 # Loss
