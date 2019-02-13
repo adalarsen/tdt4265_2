@@ -9,7 +9,7 @@ def should_early_stop(validation_loss, num_steps=3):
         return False
 
     is_increasing = [validation_loss[i] <= validation_loss[i+1] for i in range(-num_steps-1, -1)]
-    return sum(is_increasing) == len(is_increasing) 
+    return sum(is_increasing) == len(is_increasing)
 
 def train_val_split(X, Y, val_percentage):
   """
@@ -21,8 +21,8 @@ def train_val_split(X, Y, val_percentage):
   """
   dataset_size = X.shape[0]
   idx = np.arange(0, dataset_size)
-  np.random.shuffle(idx) 
-  
+  np.random.shuffle(idx)
+
   train_size = int(dataset_size*(1-val_percentage))
   idx_train = idx[:train_size]
   idx_val = idx[train_size:]
@@ -116,7 +116,7 @@ def gradient_descent(X, targets, w, learning_rate, should_check_gradient):
     else:
         delta_2 = y_2 * (1 - y_2) * d_output_2  # 64,64
 
-    dw_2 = delta_2.dot(y_1)
+    dw_2 = delta_2.T.dot(y_1)
 
     d_output_1 = delta_2.dot(w[1]) #np.matmul(w[1].T, delta_k.T) #64,64
     if tan:
@@ -149,6 +149,16 @@ def weight_initialization(input_units, output_units, init):
     else:
         return np.random.normal(0, np.divide(1, np.sqrt(input_units)), weight_shape)
 
+def shuffle(X, Y):
+     dataset_size = X.shape[0]
+     idx = np.arange(0, dataset_size)
+     np.random.shuffle(idx)
+     train_size = int(dataset_size*(1-0.1))
+     idx_train = idx[:train_size]
+     idx_val = idx[train_size:]
+     X_train, Y_train = X[idx_train], Y[idx_train]
+     return X_train, Y_train
+
 
 X_train, Y_train, X_test, Y_test = mnist.load()
 
@@ -169,7 +179,7 @@ num_batches = X_train.shape[0] // batch_size
 should_gradient_check = False
 check_step = num_batches // 10
 max_epochs = 20
-hidden_units = 64
+hidden_units = 60
 tan = 1
 
 # Tracking variables
@@ -180,14 +190,16 @@ TRAIN_ACC = []
 TEST_ACC = []
 VAL_ACC = []
 def train_loop():
+    global X_train, Y_train
     w1 = weight_initialization(X_train.shape[1],hidden_units, 0)
        # np.random.rand(hidden_units, X_train.shape[1])
-    w2 = weight_initialization(hidden_units, hidden_units)
+    w2 = weight_initialization(hidden_units, hidden_units, 0)
         #np.random.rand(Y_train.shape[1], hidden_units)
     w3 = weight_initialization(hidden_units, Y_train.shape[1], 0)
     w = [w1, w2, w3]
 
     for e in range(max_epochs): # Epochs
+        X_train, Y_train = shuffle(X_train, Y_train)
         for i in range(num_batches):
             X_batch = X_train[i*batch_size:(i+1)*batch_size]
             Y_batch = Y_train[i*batch_size:(i+1)*batch_size]
@@ -199,7 +211,7 @@ def train_loop():
                 TRAIN_LOSS.append(cross_entropy_loss(X_train, Y_train, w))
                 TEST_LOSS.append(cross_entropy_loss(X_test, Y_test, w))
                 VAL_LOSS.append(cross_entropy_loss(X_val, Y_val, w))
-                
+
 
                 TRAIN_ACC.append(calculate_accuracy(X_train, Y_train, w))
                 VAL_ACC.append(calculate_accuracy(X_val, Y_val, w))
@@ -243,9 +255,3 @@ w = np.concatenate(w, axis=0)
 plt.imshow(w, cmap="gray")
 plt.show()
 '''
-
-
-
-
-
-

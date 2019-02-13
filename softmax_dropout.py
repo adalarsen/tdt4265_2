@@ -184,7 +184,7 @@ num_batches = X_train.shape[0] // batch_size
 should_gradient_check = True
 check_step = num_batches // 10
 max_epochs = 20
-hidden_units = 64
+hidden_units = 32
 tan = 1
 
 
@@ -197,7 +197,7 @@ TEST_ACC = []
 VAL_ACC = []
 def train_loop():
     global should_gradient_check
-    w1 = weight_initialization(X_train.shape[1],hidden_units, 0)
+    w1 = weight_initialization(X_train.shape[1],hidden_units, 1)
        # np.random.rand(hidden_units, X_train.shape[1])
     w2 = weight_initialization(hidden_units, Y_train.shape[1], 0)
         #np.random.rand(Y_train.shape[1], hidden_units)

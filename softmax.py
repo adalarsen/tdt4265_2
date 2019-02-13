@@ -40,7 +40,7 @@ def bias_trick(X):
 
 def check_gradient(X, targets, w, epsilon, computed_gradient, w2):
     print("Checking gradient...")
-    dw = np.zeros_like(w)
+    dw1 = np.zeros_like(w)
     for k in range(w.shape[0]):
         for j in range(w.shape[1]):
             new_weight1, new_weight2 = np.copy(w), np.copy(w)
@@ -48,10 +48,23 @@ def check_gradient(X, targets, w, epsilon, computed_gradient, w2):
             new_weight2[k,j] -= epsilon
             loss1 = cross_entropy_loss(X, targets, [new_weight1, w2])
             loss2 = cross_entropy_loss(X, targets, [new_weight2, w2])
-            dw[k,j] = (loss1 - loss2) / (2*epsilon)
-    maximum_abosulte_difference = abs(computed_gradient-dw).max()
+            dw1[k,j] = (loss1 - loss2) / (2*epsilon)
+    maximum_abosulte_difference = abs(computed_gradient[0]-dw1).max()
     assert maximum_abosulte_difference <= epsilon**2, "Absolute error was: {}".format(maximum_abosulte_difference)
-    print("Hello")
+    print("Maximum absolute difference 1: ", maximum_abosulte_difference)
+    dw2 = np.zeros_like(w2)
+    for k in range(w2.shape[0]):
+        for j in range(w2.shape[1]):
+            new_weight1, new_weight2 = np.copy(w2), np.copy(w2)
+            new_weight1[k,j] += epsilon
+            new_weight2[k,j] -= epsilon
+            loss1 = cross_entropy_loss(X, targets, [w, new_weight1])
+            loss2 = cross_entropy_loss(X, targets, [w, new_weight2])
+            dw2[k,j] = (loss1 - loss2) / (2*epsilon)
+    maximum_abosulte_difference = abs(computed_gradient[1]-dw2).max()
+    assert maximum_abosulte_difference <= epsilon**2, "Absolute error was: {}".format(maximum_abosulte_difference)
+    print("Maximum absolute difference 2: ", maximum_abosulte_difference)
+
 
 def softmax(a):
     a_exp = np.exp(a)
@@ -137,6 +150,16 @@ def weight_initialization(input_units, output_units, init):
     else:
         return np.random.normal(0, np.divide(1, np.sqrt(input_units)), weight_shape)
 
+def shuffle(X, Y):
+     dataset_size = X.shape[0]
+     idx = np.arange(0, dataset_size)
+     np.random.shuffle(idx)
+     train_size = int(dataset_size*(1-0.1))
+     idx_train = idx[:train_size]
+     idx_val = idx[train_size:]
+     X_train, Y_train = X[idx_train], Y[idx_train]
+     return X_train, Y_train
+
 
 X_train, Y_train, X_test, Y_test = mnist.load()
 
@@ -157,7 +180,7 @@ num_batches = X_train.shape[0] // batch_size
 should_gradient_check = False
 check_step = num_batches // 10
 max_epochs = 20
-hidden_units = 64
+hidden_units = 128
 tan = 1
 
 # Tracking variables
@@ -197,10 +220,10 @@ def train_loop():
                 VAL_ACC.append(calculate_accuracy(X_val, Y_val, w))
                 TEST_ACC.append(calculate_accuracy(X_test, Y_test, w))
 
-                if should_early_stop(VAL_LOSS):
-                    print(VAL_LOSS[-4:])
-                    print("early stopping.")
-                    return w[1]
+                #if should_early_stop(VAL_LOSS):
+                #    print(VAL_LOSS[-4:])
+                #    print("early stopping.")
+                #    return w[1]
 
         if (e % 1 == 0):
             print("Epoch: %d, Loss: %.8f, Acc: %.8f, Val_Loss: %.8f, Val_Acc: %.8f "
