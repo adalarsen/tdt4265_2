@@ -150,15 +150,6 @@ def weight_initialization(input_units, output_units, init):
     else:
         return np.random.normal(0, np.divide(1, np.sqrt(input_units)), weight_shape)
 
-def shuffle(X, Y):
-     dataset_size = X.shape[0]
-     idx = np.arange(0, dataset_size)
-     np.random.shuffle(idx)
-     train_size = int(dataset_size*(1-0.1))
-     idx_train = idx[:train_size]
-     idx_val = idx[train_size:]
-     X_train, Y_train = X[idx_train], Y[idx_train]
-     return X_train, Y_train
 
 
 X_train, Y_train, X_test, Y_test = mnist.load()

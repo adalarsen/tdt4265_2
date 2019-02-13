@@ -184,7 +184,7 @@ num_batches = X_train.shape[0] // batch_size
 should_gradient_check = True
 check_step = num_batches // 10
 max_epochs = 20
-hidden_units = 32
+hidden_units = 64
 tan = 1
 
 
